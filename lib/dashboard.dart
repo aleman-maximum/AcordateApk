@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'main.dart'; // para regresar al login
+import 'login.dart'; // para regresar al login
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login.dart';
-import 'profile.dart'; // Página de perfil/configuración
+import 'profile.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -13,21 +14,8 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _pages = [
-    Center(
-      child: Text(
-        '¡Bienvenido al Dashboard!',
-        style: TextStyle(fontSize: 24),
-        textAlign: TextAlign.center,
-      ),
-    ),
-    ProfilePage(), // Página de configuración
-  ];
-
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    setState(() => _selectedIndex = index);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -40,11 +28,181 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  // 🔹 Página 1: Lista de tareas
+  Widget _buildTasksPage() {
+    final user = FirebaseAuth.instance.currentUser!;
+    final tasksRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('tasks');
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: tasksRef.orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error al cargar tareas.'));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final tasks = snapshot.data!.docs;
+
+        if (tasks.isEmpty) {
+          return const Center(
+            child: Text(
+              'No tienes tareas aún.\nPresiona + para añadir una nueva.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: tasks.length,
+          itemBuilder: (context, index) {
+            final task = tasks[index];
+            final title = task['title'] ?? '';
+            final description = task['description'] ?? '';
+
+            return Card(
+              color: const Color.fromARGB(255, 26, 26, 26),
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: ListTile(
+                title: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  description,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                trailing: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.cyanAccent),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _showTaskDialog(context, tasksRef, task);
+                    } else if (value == 'delete') {
+                      tasksRef.doc(task.id).delete();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Editar')),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Eliminar'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 🔹 Mostrar diálogo para añadir o editar tarea
+  void _showTaskDialog(
+    BuildContext context,
+    CollectionReference tasksRef, [
+    DocumentSnapshot? task,
+  ]) {
+    final titleController = TextEditingController(
+      text: task != null ? task['title'] : '',
+    );
+    final descController = TextEditingController(
+      text: task != null ? task['description'] : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.black,
+        title: Text(
+          task == null ? 'Nueva tarea' : 'Editar tarea',
+          style: const TextStyle(color: Colors.cyanAccent),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Título',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.cyanAccent),
+                ),
+              ),
+            ),
+            TextField(
+              controller: descController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Descripción',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.cyanAccent),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.cyanAccent,
+              foregroundColor: Colors.black,
+            ),
+            child: Text(task == null ? 'Guardar' : 'Actualizar'),
+            onPressed: () async {
+              final title = titleController.text.trim();
+              final desc = descController.text.trim();
+
+              if (title.isEmpty) return;
+
+              if (task == null) {
+                await tasksRef.add({
+                  'title': title,
+                  'description': desc,
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+              } else {
+                await tasksRef.doc(task.id).update({
+                  'title': title,
+                  'description': desc,
+                });
+              }
+              if (context.mounted) Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [_buildTasksPage(), const ProfilePage()];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        title: const Text('Mis Tareas'),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -65,7 +223,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-      body: _pages[_selectedIndex],
+      body: pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.black,
         selectedItemColor: Colors.cyanAccent,
@@ -74,8 +232,8 @@ class _DashboardPageState extends State<DashboardPage> {
         onTap: _onItemTapped,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Inicio',
+            icon: Icon(Icons.check_circle_outline),
+            label: 'Tareas',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
@@ -83,6 +241,20 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              backgroundColor: Colors.cyanAccent,
+              child: const Icon(Icons.add, color: Colors.black),
+              onPressed: () {
+                final user = FirebaseAuth.instance.currentUser!;
+                final tasksRef = FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .collection('tasks');
+                _showTaskDialog(context, tasksRef);
+              },
+            )
+          : null,
     );
   }
 }

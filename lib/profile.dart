@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'delete_account.dart';
 import 'dart:io';
 
 class ProfilePage extends StatefulWidget {
@@ -107,6 +108,7 @@ Future<void> _updateEmail(String newEmail) async {
       setState(() => _error = e.message);
     }
   }
+  
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +162,26 @@ Future<void> _updateEmail(String newEmail) async {
                         ),
                         const SizedBox(height: 20),
                         ElevatedButton(onPressed: _updateProfile, child: const Text('Actualizar perfil')),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          ),
+                           onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const DeleteAccountPage()),
+                              );
+                              },
+                              child: const Text(
+                                'Eliminar cuenta',
+                                style: TextStyle(color: Colors.white),
+                                ),
+                            ),
                       ],
+                      
                     ),
                   ),
                 ],

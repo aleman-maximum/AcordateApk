@@ -16,29 +16,26 @@ class _LoginPageState extends State<LoginPage> {
   String _password = '';
   String? _error;
 
-  final List<String> correosPermitidos = [
-    "homero@gmail.com",
-    "armando@gmail.com",
-    "nelson@gmail.com",
-    "emilio@gmail.com",
-  ];
-
   Future<void> _tryLogin() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
     _formKey.currentState?.save();
 
-    if (!correosPermitidos.contains(_email)) {
-      setState(() => _error = 'Este correo no está autorizado.');
-      return;
-    }
-
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(email: _email, password: _password);
+      // Iniciar sesión con Firebase
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _email,
+        password: _password,
+      );
+
       setState(() => _error = null);
 
       if (mounted) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardPage()));
+        // Ir al dashboard si todo sale bien
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardPage()),
+        );
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
@@ -52,7 +49,9 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: _email);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Correo de recuperación enviado')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Correo de recuperación enviado')),
+      );
       setState(() => _error = null);
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
@@ -82,7 +81,10 @@ class _LoginPageState extends State<LoginPage> {
               children: [
                 const Icon(Icons.lock_outline, size: 80, color: Colors.white70),
                 const SizedBox(height: 20),
-                const Text('Iniciar Sesión', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white)),
+                const Text(
+                  'Iniciar Sesión',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
                 const SizedBox(height: 30),
                 if (_error != null) ...[
                   Text(_error!, style: const TextStyle(color: Colors.redAccent)),
@@ -99,7 +101,10 @@ class _LoginPageState extends State<LoginPage> {
                           labelStyle: const TextStyle(color: Colors.white70),
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
@@ -118,7 +123,10 @@ class _LoginPageState extends State<LoginPage> {
                           labelStyle: const TextStyle(color: Colors.white70),
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                         obscureText: true,
                         validator: (v) => v == null || v.length < 6 ? 'Mínimo 6 caracteres' : null,
@@ -135,7 +143,10 @@ class _LoginPageState extends State<LoginPage> {
                         child: const Text('Entrar', style: TextStyle(fontSize: 18, color: Colors.black)),
                       ),
                       const SizedBox(height: 10),
-                      TextButton(onPressed: _resetPassword, child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(color: Colors.white70))),
+                      TextButton(
+                        onPressed: _resetPassword,
+                        child: const Text('¿Olvidaste tu contraseña?', style: TextStyle(color: Colors.white70)),
+                      ),
                       const SizedBox(height: 10),
                       TextButton(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),

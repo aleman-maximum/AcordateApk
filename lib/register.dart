@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'login.dart'; // Importa tu LoginPage
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -16,34 +17,41 @@ class _RegisterPageState extends State<RegisterPage> {
   String _password = '';
   String? _error;
 
-  final List<String> correosPermitidos = [
-    "homero@gmail.com",
-    "armando@gmail.com",
-    "nelson@gmail.com",
-    "emilio@gmail.com",
-  ];
-
   Future<void> _tryRegister() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
     _formKey.currentState?.save();
 
-    if (!correosPermitidos.contains(_email)) {
-      setState(() => _error = 'Este correo no está autorizado.');
-      return;
-    }
-
     try {
-      UserCredential userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: _email, password: _password);
-      await FirebaseFirestore.instance.collection('users').doc(userCred.user!.uid).set({'name': _name, 'email': _email});
+      // Crear usuario en Firebase
+      UserCredential userCred = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: _email, password: _password);
+
+      // Guardar info extra en Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCred.user!.uid)
+          .set({'name': _name, 'email': _email});
+
       setState(() => _error = null);
 
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cuenta creada. Inicia sesión')));
+        // Navegar directamente a LoginPage
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cuenta creada. Inicia sesión')),
+        );
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message);
+      if (e.code == 'email-already-in-use') {
+        setState(() => _error = 'Este correo ya está registrado. Inicia sesión.');
+      } else {
+        setState(() => _error = e.message);
+      }
     }
   }
 
@@ -70,7 +78,11 @@ class _RegisterPageState extends State<RegisterPage> {
               children: [
                 const Icon(Icons.person_add, size: 80, color: Colors.white70),
                 const SizedBox(height: 20),
-                const Text('Crear Cuenta', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white)),
+                const Text(
+                  'Crear Cuenta',
+                  style: TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
                 const SizedBox(height: 30),
                 if (_error != null) ...[
                   Text(_error!, style: const TextStyle(color: Colors.redAccent)),
@@ -87,7 +99,9 @@ class _RegisterPageState extends State<RegisterPage> {
                           labelStyle: const TextStyle(color: Colors.white70),
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Nombre obligatorio';
@@ -105,12 +119,15 @@ class _RegisterPageState extends State<RegisterPage> {
                           labelStyle: const TextStyle(color: Colors.white70),
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none),
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Correo obligatorio';
-                          final emailRegExp = RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$");
+                          final emailRegExp =
+                              RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$");
                           if (!emailRegExp.hasMatch(v.trim())) return 'Correo inválido';
                           return null;
                         },
@@ -124,10 +141,13 @@ class _RegisterPageState extends State<RegisterPage> {
                           labelStyle: const TextStyle(color: Colors.white70),
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none),
                         ),
                         obscureText: true,
-                        validator: (v) => v == null || v.length < 6 ? 'Mínimo 6 caracteres' : null,
+                        validator: (v) =>
+                            v == null || v.length < 6 ? 'Mínimo 6 caracteres' : null,
                         onSaved: (v) => _password = v!,
                       ),
                       const SizedBox(height: 30),
@@ -138,10 +158,14 @@ class _RegisterPageState extends State<RegisterPage> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                         ),
                         onPressed: _tryRegister,
-                        child: const Text('Crear cuenta', style: TextStyle(fontSize: 18, color: Colors.black)),
+                        child:
+                            const Text('Crear cuenta', style: TextStyle(fontSize: 18, color: Colors.black)),
                       ),
                       const SizedBox(height: 16),
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Ya tienes cuenta? Inicia sesión', style: TextStyle(color: Colors.white70))),
+                      TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Ya tienes cuenta? Inicia sesión',
+                              style: TextStyle(color: Colors.white70))),
                     ],
                   ),
                 ),

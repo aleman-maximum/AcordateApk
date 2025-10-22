@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'login.dart'; // Importa tu LoginPage
+import 'login.dart';
+import 'verification_required.dart'; // 🚀 Nueva Importación
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -27,6 +28,13 @@ class _RegisterPageState extends State<RegisterPage> {
       UserCredential userCred = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: _email, password: _password);
 
+      final user = userCred.user;
+
+      if (user != null) {
+        // 🔑 Envía el correo de verificación
+        await user.sendEmailVerification();
+      }
+
       // Guardar info extra en Firestore
       await FirebaseFirestore.instance
           .collection('users')
@@ -36,19 +44,26 @@ class _RegisterPageState extends State<RegisterPage> {
       setState(() => _error = null);
 
       if (mounted) {
-        // Navegar directamente a LoginPage
+        // Navegar a la página de aviso para que verifique el correo
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
+          MaterialPageRoute(builder: (_) => const VerificationRequiredPage()),
         );
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cuenta creada. Inicia sesión')),
+          const SnackBar(
+            content: Text(
+              '¡Cuenta creada! Revisa tu correo para verificar tu email.',
+            ),
+            backgroundColor: Colors.amber,
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
-        setState(() => _error = 'Este correo ya está registrado. Inicia sesión.');
+        setState(
+          () => _error = 'Este correo ya está registrado. Inicia sesión.',
+        );
       } else {
         setState(() => _error = e.message);
       }
@@ -81,11 +96,17 @@ class _RegisterPageState extends State<RegisterPage> {
                 const Text(
                   'Crear Cuenta',
                   style: TextStyle(
-                      fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white),
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 30),
                 if (_error != null) ...[
-                  Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
                   const SizedBox(height: 20),
                 ],
                 Form(
@@ -100,13 +121,16 @@ class _RegisterPageState extends State<RegisterPage> {
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Nombre obligatorio';
+                          if (v == null || v.trim().isEmpty)
+                            return 'Nombre obligatorio';
                           final nameRegExp = RegExp(r"^[a-zA-Z\s]+$");
-                          if (!nameRegExp.hasMatch(v.trim())) return 'Solo letras permitidas';
+                          if (!nameRegExp.hasMatch(v.trim()))
+                            return 'Solo letras permitidas';
                           return null;
                         },
                         onSaved: (v) => _name = v!.trim(),
@@ -120,15 +144,19 @@ class _RegisterPageState extends State<RegisterPage> {
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Correo obligatorio';
-                          final emailRegExp =
-                              RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$");
-                          if (!emailRegExp.hasMatch(v.trim())) return 'Correo inválido';
+                          if (v == null || v.trim().isEmpty)
+                            return 'Correo obligatorio';
+                          final emailRegExp = RegExp(
+                            r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+                          );
+                          if (!emailRegExp.hasMatch(v.trim()))
+                            return 'Correo inválido';
                           return null;
                         },
                         onSaved: (v) => _email = v!.trim(),
@@ -142,30 +170,42 @@ class _RegisterPageState extends State<RegisterPage> {
                           filled: true,
                           fillColor: Colors.black.withOpacity(0.3),
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none),
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                         obscureText: true,
-                        validator: (v) =>
-                            v == null || v.length < 6 ? 'Mínimo 6 caracteres' : null,
+                        validator: (v) => v == null || v.length < 6
+                            ? 'Mínimo 6 caracteres'
+                            : null,
                         onSaved: (v) => _password = v!,
                       ),
                       const SizedBox(height: 30),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.cyanAccent,
-                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 40,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
                         ),
                         onPressed: _tryRegister,
-                        child:
-                            const Text('Crear cuenta', style: TextStyle(fontSize: 18, color: Colors.black)),
+                        child: const Text(
+                          'Crear cuenta',
+                          style: TextStyle(fontSize: 18, color: Colors.black),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Ya tienes cuenta? Inicia sesión',
-                              style: TextStyle(color: Colors.white70))),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          'Ya tienes cuenta? Inicia sesión',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
                     ],
                   ),
                 ),

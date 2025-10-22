@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login.dart';
 import 'profile.dart';
+import 'add_task_page.dart'; // 🚀 Nueva Importación
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -89,6 +90,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     if (value == 'edit') {
                       _showTaskDialog(context, tasksRef, task);
                     } else if (value == 'delete') {
+                      // 💡 NOTA: Aquí deberías considerar cancelar la notificación asociada a esta tarea.
                       tasksRef.doc(task.id).delete();
                     }
                   },
@@ -109,6 +111,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // 🔹 Mostrar diálogo para añadir o editar tarea
+  // Este método AHORA se usa SOLO para EDITAR tareas (desde el PopUpMenuButton)
   void _showTaskDialog(
     BuildContext context,
     CollectionReference tasksRef, [
@@ -121,6 +124,7 @@ class _DashboardPageState extends State<DashboardPage> {
       text: task != null ? task['description'] : '',
     );
 
+    // ... (Tu lógica del AlertDialog para edición, sin cambios)
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -177,6 +181,7 @@ class _DashboardPageState extends State<DashboardPage> {
               if (title.isEmpty) return;
 
               if (task == null) {
+                // NOTA: Esta rama 'Guardar' no se usará desde el FAB, solo si la llamas directamente.
                 await tasksRef.add({
                   'title': title,
                   'description': desc,
@@ -246,12 +251,12 @@ class _DashboardPageState extends State<DashboardPage> {
               backgroundColor: Colors.cyanAccent,
               child: const Icon(Icons.add, color: Colors.black),
               onPressed: () {
-                final user = FirebaseAuth.instance.currentUser!;
-                final tasksRef = FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .collection('tasks');
-                _showTaskDialog(context, tasksRef);
+                // 🚀 CAMBIO CLAVE: Navegar a AddTaskPage para crear nuevas tareas.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddTaskPage()),
+                );
+                // El código anterior (llamando a _showTaskDialog) fue reemplazado.
               },
             )
           : null,

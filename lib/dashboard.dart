@@ -29,14 +29,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // 🔹 Página 1: Lista de tareas
-  Widget _buildTasksPage() {
-    final user = FirebaseAuth.instance.currentUser!;
-    final tasksRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('tasks');
-
+  Widget _buildTasksPage(CollectionReference tasksRef) {
     return StreamBuilder<QuerySnapshot>(
       stream: tasksRef.orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
@@ -65,7 +58,6 @@ class _DashboardPageState extends State<DashboardPage> {
             final task = tasks[index];
             final title = task['title'] ?? '';
             final description = task['description'] ?? '';
-
             return Card(
               color: const Color.fromARGB(255, 26, 26, 26),
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -73,35 +65,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 borderRadius: BorderRadius.circular(15),
               ),
               child: ListTile(
-                title: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                subtitle: Text(
-                  description,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                trailing: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: Colors.cyanAccent),
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      _showTaskDialog(context, tasksRef, task);
-                    } else if (value == 'delete') {
-                      // 💡 NOTA: Aquí deberías considerar cancelar la notificación asociada a esta tarea.
-                      tasksRef.doc(task.id).delete();
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Eliminar'),
-                    ),
-                  ],
-                ),
+                title: Text(title,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle:
+                    Text(description, style: const TextStyle(color: Colors.white70)),
               ),
             );
           },
@@ -110,104 +78,25 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // 🔹 Mostrar diálogo para añadir o editar tarea
-  // Este método AHORA se usa SOLO para EDITAR tareas (desde el PopUpMenuButton)
-  void _showTaskDialog(
-    BuildContext context,
-    CollectionReference tasksRef, [
-    DocumentSnapshot? task,
-  ]) {
-    final titleController = TextEditingController(
-      text: task != null ? task['title'] : '',
-    );
-    final descController = TextEditingController(
-      text: task != null ? task['description'] : '',
-    );
-
-    // ... (Tu lógica del AlertDialog para edición, sin cambios)
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black,
-        title: Text(
-          task == null ? 'Nueva tarea' : 'Editar tarea',
-          style: const TextStyle(color: Colors.cyanAccent),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Título',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.cyanAccent),
-                ),
-              ),
-            ),
-            TextField(
-              controller: descController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Descripción',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.cyanAccent),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: Colors.redAccent),
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.cyanAccent,
-              foregroundColor: Colors.black,
-            ),
-            child: Text(task == null ? 'Guardar' : 'Actualizar'),
-            onPressed: () async {
-              final title = titleController.text.trim();
-              final desc = descController.text.trim();
-
-              if (title.isEmpty) return;
-
-              if (task == null) {
-                // NOTA: Esta rama 'Guardar' no se usará desde el FAB, solo si la llamas directamente.
-                await tasksRef.add({
-                  'title': title,
-                  'description': desc,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
-              } else {
-                await tasksRef.doc(task.id).update({
-                  'title': title,
-                  'description': desc,
-                });
-              }
-              if (context.mounted) Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = [_buildTasksPage(), const ProfilePage()];
+    final user = FirebaseAuth.instance.currentUser!;
+    final tasksRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('tasks');
+
+    // ✅ Construimos la lista de páginas AQUÍ dentro de build
+    final List<Widget> pages = [
+      _buildTasksPage(tasksRef),
+      const ProfilePage(),
+    ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis Tareas'),
+        title: Text(_selectedIndex == 0 ? 'Mis Tareas' : 'Perfil'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -242,7 +131,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: 'Configuración',
+            label: 'Perfil',
           ),
         ],
       ),
@@ -251,12 +140,10 @@ class _DashboardPageState extends State<DashboardPage> {
               backgroundColor: Colors.cyanAccent,
               child: const Icon(Icons.add, color: Colors.black),
               onPressed: () {
-                // 🚀 CAMBIO CLAVE: Navegar a AddTaskPage para crear nuevas tareas.
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AddTaskPage()),
                 );
-                // El código anterior (llamando a _showTaskDialog) fue reemplazado.
               },
             )
           : null,

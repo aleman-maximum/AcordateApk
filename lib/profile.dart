@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'delete_account.dart';
 import 'dart:io';
@@ -16,12 +17,15 @@ class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
+  final _storage = FirebaseStorage.instance;
 
   String _name = '';
   String _email = '';
+  String _photoUrl = '';
   String? _error;
   File? _imageFile;
   bool _loading = false;
+  bool _hasChanges = false;
 
   @override
   void initState() {
@@ -33,9 +37,14 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = _auth.currentUser;
     if (user != null) {
       final doc = await _firestore.collection('users').doc(user.uid).get();
+      final data = doc.data();
       setState(() {
-        _name = doc['name'] ?? '';
+        _name = data?['name'] ?? '';
         _email = user.email ?? '';
+        _photoUrl = (data != null && data['photoUrl'] != null && data['photoUrl'] != '')
+            ? data['photoUrl']
+            : '';
+        _imageFile = null;
       });
     }
   }
@@ -46,13 +55,34 @@ class _ProfilePageState extends State<ProfilePage> {
     if (picked != null) {
       setState(() {
         _imageFile = File(picked.path);
+        _hasChanges = true;
       });
     }
+  }
+
+  Future<String?> _uploadProfileImage(String uid) async {
+    if (_imageFile == null) return null;
+    final ref = _storage.ref().child('profile_images/$uid.jpg');
+    await ref.putFile(_imageFile!);
+    return await ref.getDownloadURL();
+  }
+
+  ImageProvider _getProfileImage() {
+    if (_imageFile != null) return FileImage(_imageFile!);
+    if (_photoUrl.isNotEmpty) return NetworkImage(_photoUrl);
+    return const AssetImage('assets/avatar_placeholder.png');
   }
 
   Future<void> _updateProfile() async {
     final user = _auth.currentUser;
     if (user == null) return;
+
+    if (!_hasChanges) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay cambios que guardar.')),
+      );
+      return;
+    }
 
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
@@ -61,13 +91,25 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _loading = true);
 
     try {
-      // Actualizar nombre en Firestore
-      await _firestore.collection('users').doc(user.uid).update({'name': _name});
+      String? downloadUrl;
 
-      // TODO: Subir imagen a Storage y actualizar URL en Firestore
-      // if (_imageFile != null) {...}
+      if (_imageFile != null) {
+        downloadUrl = await _uploadProfileImage(user.uid);
+      }
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Perfil actualizado')));
+      final userDoc = _firestore.collection('users').doc(user.uid);
+      await userDoc.set({
+        'name': _name,
+        if (downloadUrl != null) 'photoUrl': downloadUrl,
+      }, SetOptions(merge: true));
+
+      setState(() => _hasChanges = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil actualizado correctamente.')),
+      );
+
+      await _loadUserData();
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -75,49 +117,48 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-Future<void> _updateEmail(String newEmail) async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+  Future<void> _updateEmail(String newEmail) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
 
-  try {
-    // ⚠️ Reautenticación antes de cambiar el correo
-    final credential = EmailAuthProvider.credential(
-      email: user.email!,
-      password: 'user_password', // Debes pedirle la contraseña real al usuario
-    );
-    await user.reauthenticateWithCredential(credential);
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: 'user_password', // reemplaza con la contraseña real
+      );
+      await user.reauthenticateWithCredential(credential);
+      await user.verifyBeforeUpdateEmail(newEmail);
 
-    // ✅ Nuevo método en firebase_auth v6
-    await user.verifyBeforeUpdateEmail(newEmail);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Correo de verificación enviado al nuevo email.')),
-    );
-  } on FirebaseAuthException catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: ${e.message}')),
-    );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Correo de verificación enviado al nuevo email.')),
+      );
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.message}')),
+      );
+    }
   }
-}
 
   Future<void> _updatePassword(String newPassword) async {
     try {
       await _auth.currentUser!.updatePassword(newPassword);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contraseña actualizada')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Contraseña actualizada')),
+      );
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
     }
   }
-  
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Perfil')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+    return _loading
+        ? const Center(child: CircularProgressIndicator())
+        : RefreshIndicator(
+            onRefresh: _loadUserData,
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [
                   if (_error != null) ...[
@@ -126,13 +167,25 @@ Future<void> _updateEmail(String newEmail) async {
                   ],
                   GestureDetector(
                     onTap: _pickImage,
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
-                      child: _imageFile == null ? const Icon(Icons.person, size: 50) : null,
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        CircleAvatar(
+                          radius: 55,
+                          backgroundImage: _getProfileImage(),
+                        ),
+                        Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.cyanAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: const Icon(Icons.camera_alt, color: Colors.black),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 20),
                   Form(
                     key: _formKey,
                     child: Column(
@@ -140,19 +193,16 @@ Future<void> _updateEmail(String newEmail) async {
                         TextFormField(
                           initialValue: _name,
                           decoration: const InputDecoration(labelText: 'Nombre'),
-                          validator: (v) => v == null || v.isEmpty ? 'Nombre obligatorio' : null,
-                          onSaved: (v) => _name = v!,
+                          onChanged: (_) => _hasChanges = true,
+                          onSaved: (v) => _name = v!.trim(),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
                           initialValue: _email,
                           decoration: const InputDecoration(labelText: 'Correo'),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return 'Correo obligatorio';
-                            if (!RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").hasMatch(v)) return 'Correo inválido';
-                            return null;
+                          onFieldSubmitted: (value) {
+                            if (value != _email) _updateEmail(value);
                           },
-                          onFieldSubmitted: _updateEmail,
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -160,33 +210,42 @@ Future<void> _updateEmail(String newEmail) async {
                           obscureText: true,
                           onFieldSubmitted: _updatePassword,
                         ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(onPressed: _updateProfile, child: const Text('Actualizar perfil')),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 25),
+                        ElevatedButton(
+                          onPressed: _updateProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.cyanAccent,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          child: const Text('Guardar cambios'),
+                        ),
+                        const SizedBox(height: 25),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.redAccent,
                             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
                           ),
-                           onPressed: () {
+                          onPressed: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const DeleteAccountPage()),
-                              );
-                              },
-                              child: const Text(
-                                'Eliminar cuenta',
-                                style: TextStyle(color: Colors.white),
-                                ),
-                            ),
+                            );
+                          },
+                          child: const Text('Eliminar cuenta', style: TextStyle(color: Colors.white)),
+                        ),
                       ],
-                      
                     ),
                   ),
                 ],
               ),
             ),
-    );
+          );
   }
 }

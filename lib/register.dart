@@ -126,11 +126,13 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                         ),
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty)
+                          if (v == null || v.trim().isEmpty) {
                             return 'Nombre obligatorio';
+                          }
                           final nameRegExp = RegExp(r"^[a-zA-Z\s]+$");
-                          if (!nameRegExp.hasMatch(v.trim()))
+                          if (!nameRegExp.hasMatch(v.trim())) {
                             return 'Solo letras permitidas';
+                          }
                           return null;
                         },
                         onSaved: (v) => _name = v!.trim(),
@@ -150,13 +152,15 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty)
+                          if (v == null || v.trim().isEmpty) {
                             return 'Correo obligatorio';
+                          }
                           final emailRegExp = RegExp(
                             r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
                           );
-                          if (!emailRegExp.hasMatch(v.trim()))
+                          if (!emailRegExp.hasMatch(v.trim())) {
                             return 'Correo inválido';
+                          }
                           return null;
                         },
                         onSaved: (v) => _email = v!.trim(),

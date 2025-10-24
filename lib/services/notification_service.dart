@@ -1,79 +1,86 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'
-    as futil; // 🔑 USAMOS EL PREFIJO 'futil' (Flutter Util)
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tzdata;
-import '../models/task.dart'; // Tu modelo de datos (sin prefijo)
 
 class NotificationService {
-  final futil.FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      futil.FlutterLocalNotificationsPlugin();
+  // Patrón Singleton para una única instancia del servicio
+  static final NotificationService _notificationService =
+      NotificationService._internal();
 
-  Future<void> init() async {
-    // 1. Inicializar Timezone (¡AQUÍ VA ESTA LÓGICA!)
-    tzdata.initializeTimeZones();
-    tz.setLocalLocation(
-      tz.getLocation('America/Mexico_City'),
-    ); // Ajusta a tu zona horaria
+  factory NotificationService() {
+    return _notificationService;
+  }
 
-    // 2. Inicializar el plugin para Android
-    const futil.AndroidInitializationSettings initializationSettingsAndroid =
-        futil.AndroidInitializationSettings('@mipmap/ic_launcher');
+  // Constructor interno privado para el Singleton
+  NotificationService._internal();
 
-    const futil.InitializationSettings initializationSettings =
-        futil.InitializationSettings(android: initializationSettingsAndroid);
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
+  // 🔑 Inicialización de la configuración
+  Future<void> initNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher'); // Ícono de tu app
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+          android: initializationSettingsAndroid,
+          iOS: initializationSettingsIOS,
+        );
+
+    // Inicializa el plugin
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  Future<void> scheduleNotification(Task task) async {
-    // 1. Definir la hora de la notificación (ej: 30 minutos antes del vencimiento)
-    final scheduledDate = task.dueDate.subtract(const Duration(minutes: 30));
-
-    // 2. Convertir a la zona horaria local (¡AQUÍ ESTÁ LA DEFINICIÓN DE scheduledTZ!)
-    final tz.TZDateTime scheduledTZ = tz.TZDateTime.from(
+  // ⏰ Función para PROGRAMAR la notificación en una hora específica
+  Future<void> scheduleNotification(
+    int id,
+    String title,
+    String body,
+    DateTime scheduledDate,
+  ) async {
+    // 1. Convierte DateTime a TZDateTime para la programación
+    final tz.TZDateTime scheduledTime = tz.TZDateTime.from(
       scheduledDate,
-      tz.local,
+      tz.local, // Usa la zona horaria local del dispositivo
     );
 
-    // 3. Si la fecha programada ya pasó, no notificar
-    if (scheduledTZ.isBefore(tz.TZDateTime.now(tz.local))) {
+    // 2. Verifica que la hora sea FUTURA
+    if (scheduledTime.isBefore(tz.TZDateTime.now(tz.local))) {
+      // No programes notificaciones para el pasado
       return;
     }
 
-    // 4. Detalles de la notificación
-    const futil.AndroidNotificationDetails androidDetails =
-        futil.AndroidNotificationDetails(
-          'task_channel_id',
-          'Recordatorios de Tareas',
-          channelDescription: 'Alertas para tareas pendientes con prioridad',
-          importance: futil.Importance.max,
-          priority: futil.Priority.high,
-          playSound: true,
-        );
-
-    const futil.NotificationDetails platformDetails = futil.NotificationDetails(
-      android: androidDetails,
-    );
-
-    final notificationId = task.id.hashCode;
-    final taskPriorityName = task.priority
-        .toString()
-        .split('.')
-        .last
-        .toUpperCase();
-
-    // 5. Programar la notificación
     await flutterLocalNotificationsPlugin.zonedSchedule(
-      notificationId,
-      '🚨 Tarea de Prioridad $taskPriorityName 🚨',
-      '¡Atención! "${task.title}" vence en 30 minutos.',
-      scheduledTZ, // Aquí se usa la variable definida
-      platformDetails,
-      androidScheduleMode: futil.AndroidScheduleMode.exactAllowWhileIdle,
+      id,
+      title,
+      body,
+      scheduledTime,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'task_channel_id', // ID único del canal
+          'Recordatorios de Tareas',
+          channelDescription:
+              'Canal para las notificaciones programadas de tareas.',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      // Parámetros eliminados: uiLocalNotificationDateInterpretation ya no es necesario
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
     );
   }
 
-  Future<void> cancelNotification(Task task) async {
-    await flutterLocalNotificationsPlugin.cancel(task.id.hashCode);
+  // ❌ Función para CANCELAR todas las notificaciones
+  Future<void> cancelAllNotifications() async {
+    await flutterLocalNotificationsPlugin.cancelAll();
   }
 }

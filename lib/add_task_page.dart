@@ -19,6 +19,9 @@ class _AddTaskPageState extends State<AddTaskPage> {
   Priority _selectedPriority = Priority.media;
   String? _error;
 
+  // 🔑 NUEVA VARIABLE: Controla el estado de guardado
+  bool _isSaving = false;
+
   final NotificationService _notificationService = NotificationService();
 
   Future<void> _pickDate() async {
@@ -40,9 +43,15 @@ class _AddTaskPageState extends State<AddTaskPage> {
   }
 
   Future<void> _saveTask() async {
+    // 🛑 VERIFICACIÓN CLAVE: Si ya está guardando, salimos para evitar doble ejecución
+    if (_isSaving) return;
+
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid || _selectedDate == null || _selectedTime == null) {
-      setState(() => _error = 'Debes completar todos los campos, incluyendo fecha y hora.');
+      setState(
+        () => _error =
+            'Debes completar todos los campos, incluyendo fecha y hora.',
+      );
       return;
     }
 
@@ -52,6 +61,13 @@ class _AddTaskPageState extends State<AddTaskPage> {
       return;
     }
 
+    // 🔑 INICIA EL GUARDADO: Deshabilita el botón
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+
+    // Combina la fecha y hora seleccionadas
     final dueDate = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
@@ -74,22 +90,32 @@ class _AddTaskPageState extends State<AddTaskPage> {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
+      // 1. Guarda la tarea y obtiene la referencia del documento (docRef)
       final docRef = await tasksRef.add(taskData);
 
-      final task = Task(
-        id: docRef.id,
-        title: _titleController.text.trim(),
-        userId: user.uid,
-        dueDate: dueDate,
-        priority: _selectedPriority,
+      // 2. CREACIÓN DE LA NOTIFICACIÓN:
+      final String taskIdString = docRef.id;
+      final int notificationId = taskIdString.hashCode.abs() % 1000000;
+
+      await _notificationService.scheduleNotification(
+        notificationId, // Argumento 1: int id
+        'RECORDATORIO: ${taskData['title']}', // Argumento 2: String title
+        'Prioridad ${_selectedPriority.name.toUpperCase()}', // Argumento 3: String body
+        dueDate, // Argumento 4: DateTime scheduledDate
       );
 
-      // Aquí sí funciona, porque pasas el objeto Task
-      await _notificationService.scheduleNotification(task);
-
+      // Limpia el error y regresa al dashboard
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      // Si hay un error, lo mostramos
       setState(() => _error = 'Error al guardar la tarea: $e');
+    } finally {
+      // 🔑 FINALIZA EL GUARDADO: Habilita el botón de nuevo (SI AÚN ESTAMOS EN ESTA PANTALLA)
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -137,8 +163,9 @@ class _AddTaskPageState extends State<AddTaskPage> {
                   ),
                 ),
                 style: const TextStyle(color: Colors.white),
-                validator: (value) =>
-                    (value == null || value.isEmpty) ? 'El título es obligatorio' : null,
+                validator: (value) => (value == null || value.isEmpty)
+                    ? 'El título es obligatorio'
+                    : null,
               ),
               const SizedBox(height: 20),
               Card(
@@ -147,11 +174,15 @@ class _AddTaskPageState extends State<AddTaskPage> {
                   title: Text(
                     formatDate(_selectedDate, _selectedTime),
                     style: TextStyle(
-                        color:
-                            _selectedDate == null ? Colors.white54 : Colors.white),
+                      color: _selectedDate == null
+                          ? Colors.white54
+                          : Colors.white,
+                    ),
                   ),
-                  trailing:
-                      const Icon(Icons.calendar_today, color: Colors.cyanAccent),
+                  trailing: const Icon(
+                    Icons.calendar_today,
+                    color: Colors.cyanAccent,
+                  ),
                   onTap: () async {
                     await _pickDate();
                     if (mounted && _selectedDate != null) {
@@ -161,16 +192,21 @@ class _AddTaskPageState extends State<AddTaskPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text('Prioridad:',
-                  style: TextStyle(fontSize: 16, color: Colors.white70)),
+              const Text(
+                'Prioridad:',
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
               Column(
                 children: Priority.values.map((priority) {
                   return RadioListTile<Priority>(
-                    title: Text(priority.name.toUpperCase(),
-                        style: TextStyle(
-                            color: priority == Priority.alta
-                                ? Colors.redAccent
-                                : Colors.white)),
+                    title: Text(
+                      priority.name.toUpperCase(),
+                      style: TextStyle(
+                        color: priority == Priority.alta
+                            ? Colors.redAccent
+                            : Colors.white,
+                      ),
+                    ),
                     value: priority,
                     groupValue: _selectedPriority,
                     onChanged: (value) =>
@@ -182,8 +218,10 @@ class _AddTaskPageState extends State<AddTaskPage> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 20),
-                  child:
-                      Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
                 ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -193,9 +231,21 @@ class _AddTaskPageState extends State<AddTaskPage> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                onPressed: _saveTask,
-                child: const Text('Guardar Tarea',
-                    style: TextStyle(fontSize: 18, color: Colors.black)),
+                // 🔑 CORRECCIÓN AQUÍ: Deshabilitamos el botón si estamos guardando
+                onPressed: _isSaving ? null : _saveTask,
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.black,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : const Text(
+                        'Guardar Tarea',
+                        style: TextStyle(fontSize: 18, color: Colors.black),
+                      ),
               ),
             ],
           ),

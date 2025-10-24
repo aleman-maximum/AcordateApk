@@ -24,6 +24,8 @@ dependencies:
   # 🚀 NUEVOS: Para Notificaciones Locales y Fechas 🚀
   flutter_local_notifications: ^19.5.0 # Necesario para programar notificaciones en el dispositivo
   timezone: ^0.10.1                      # Necesario para manejar la zona horaria para notificaciones exactas
+  firebase_app_check: ^0.4.1+1
+  intl: ^0.20.2
 
 
 dev_dependencies:

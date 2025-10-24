@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register.dart';
 import 'dashboard.dart';
-import 'verification_required.dart'; // 🚀 Nueva Importación
+// 🚀 Nueva Importación
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -145,13 +145,15 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
-                          if (v == null || v.trim().isEmpty)
+                          if (v == null || v.trim().isEmpty) {
                             return 'El correo es obligatorio';
+                          }
                           final emailRegExp = RegExp(
                             r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
                           );
-                          if (!emailRegExp.hasMatch(v.trim()))
+                          if (!emailRegExp.hasMatch(v.trim())) {
                             return 'Correo inválido';
+                          }
                           return null;
                         },
                         onSaved: (v) => _email = v!.trim(),

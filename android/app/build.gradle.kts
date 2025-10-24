@@ -49,4 +49,8 @@ flutter {
 dependencies {
     // La sintaxis de coreLibraryDesugaring es especial en Kotlin DSL
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    
+    // 🔒 DEPENDENCIAS DE FIREBASE APP CHECK CON PLAY INTEGRITY (NUEVAS)
+    implementation("com.google.firebase:firebase-appcheck") 
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
 }

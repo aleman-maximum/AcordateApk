@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'login.dart';
+import 'add_task_page.dart';
 import 'profile.dart';
-import 'add_task_page.dart'; // 🚀 Nueva Importación
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -15,138 +14,156 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
 
-  void _onItemTapped(int index) {
-    setState(() => _selectedIndex = index);
-  }
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
 
-  Future<void> _logout(BuildContext context) async {
-    await FirebaseAuth.instance.signOut();
-    if (context.mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
+    if (user == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Usuario no autenticado',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
       );
     }
+
+    final screens = [
+      _buildTasksPage(user),
+      const ProfilePage(),
+    ];
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('TaskingCheck'),
+        backgroundColor: Colors.black,
+      ),
+      body: screens[_selectedIndex],
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              backgroundColor: Colors.cyanAccent,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddTaskPage()),
+                ).then((_) => setState(() {})); // refrescar al volver
+              },
+              child: const Icon(Icons.add, color: Colors.black),
+            )
+          : null,
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.grey[900],
+        selectedItemColor: Colors.cyanAccent,
+        unselectedItemColor: Colors.white70,
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt),
+            label: 'Mis Tareas',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Perfil',
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildTasksPage(CollectionReference tasksRef) {
+  /// Página de tareas del usuario autenticado
+  Widget _buildTasksPage(User user) {
+    final tasksStream = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('tasks')
+        .orderBy('dueDate')
+        .snapshots();
+
     return StreamBuilder<QuerySnapshot>(
-      stream: tasksRef.orderBy('createdAt', descending: true).snapshots(),
+      stream: tasksStream,
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Center(child: Text('Error al cargar tareas.'));
-        }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: Colors.cyanAccent));
         }
 
-        final tasks = snapshot.data!.docs;
-
-        if (tasks.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
             child: Text(
-              'No tienes tareas aún.\nPresiona + para añadir una nueva.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              'No hay tareas disponibles',
+              style: TextStyle(color: Colors.white70),
             ),
           );
         }
 
+        final tasks = snapshot.data!.docs;
+
         return ListView.builder(
+          padding: const EdgeInsets.all(12),
           itemCount: tasks.length,
           itemBuilder: (context, index) {
-            final task = tasks[index];
-            final title = task['title'] ?? '';
-            final description = task['description'] ?? '';
+            final task = tasks[index].data() as Map<String, dynamic>;
+            final title = task['title'] ?? 'Sin título';
+            final priority = task['priority'] ?? 'media';
+
+            DateTime? dueDate;
+            if (task['dueDate'] != null && task['dueDate'] is Timestamp) {
+              dueDate = (task['dueDate'] as Timestamp).toDate();
+            }
+
+            Color priorityColor;
+            switch (priority) {
+              case 'alta':
+                priorityColor = Colors.redAccent;
+                break;
+              case 'media':
+                priorityColor = Colors.orangeAccent;
+                break;
+              case 'baja':
+                priorityColor = Colors.greenAccent;
+                break;
+              default:
+                priorityColor = Colors.white;
+            }
+
             return Card(
-              color: const Color.fromARGB(255, 26, 26, 26),
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              color: Colors.white10,
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: ListTile(
-                title: Text(title,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle:
-                    Text(description, style: const TextStyle(color: Colors.white70)),
+                title: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: dueDate != null
+                    ? Text(
+                        'Vence: ${dueDate.day}/${dueDate.month}/${dueDate.year} a las ${dueDate.hour}:${dueDate.minute.toString().padLeft(2, '0')}',
+                        style: const TextStyle(color: Colors.white70),
+                      )
+                    : const Text(
+                        'Sin fecha',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                trailing: Text(
+                  priority.toUpperCase(),
+                  style: TextStyle(
+                    color: priorityColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             );
           },
         );
       },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser!;
-    final tasksRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('tasks');
-
-    // ✅ Construimos la lista de páginas AQUÍ dentro de build
-    final List<Widget> pages = [
-      _buildTasksPage(tasksRef),
-      const ProfilePage(),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_selectedIndex == 0 ? 'Mis Tareas' : 'Perfil'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color.fromARGB(255, 47, 211, 233),
-                Color.fromARGB(255, 0, 0, 0),
-                Color.fromARGB(255, 238, 92, 151),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _logout(context),
-          ),
-        ],
-      ),
-      body: pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.black,
-        selectedItemColor: Colors.cyanAccent,
-        unselectedItemColor: Colors.white70,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.check_circle_outline),
-            label: 'Tareas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Perfil',
-          ),
-        ],
-      ),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              backgroundColor: Colors.cyanAccent,
-              child: const Icon(Icons.add, color: Colors.black),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddTaskPage()),
-                );
-              },
-            )
-          : null,
     );
   }
 }

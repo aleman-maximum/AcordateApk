@@ -1,8 +1,4 @@
-// Archivo: lib/models/task.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-// 1. Enum para la Prioridad
 enum Priority { baja, media, alta }
 
 class Task {
@@ -11,7 +7,6 @@ class Task {
   final String userId;
   final DateTime dueDate;
   final Priority priority;
-  final bool isCompleted;
 
   Task({
     required this.id,
@@ -19,18 +14,15 @@ class Task {
     required this.userId,
     required this.dueDate,
     required this.priority,
-    this.isCompleted = false,
   });
 
-  // ... (Resto de los métodos fromFirestore y toFirestore)
-  // Dejamos el cuerpo aquí por brevedad, asumiendo que ya lo tienes
-  factory Task.fromFirestore(DocumentSnapshot doc) {
-    // ... Implementación ...
-    throw UnimplementedError();
-  }
-
   Map<String, dynamic> toFirestore() {
-    // ... Implementación ...
-    throw UnimplementedError();
+    return {
+      'title': title,
+      'userId': userId,
+      'dueDate': Timestamp.fromDate(dueDate),
+      'priority': priority.name,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
   }
 }
